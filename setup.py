@@ -373,6 +373,10 @@ setup(
         "einops",
         "triton",
         "transformers",
+        "mido",
+        "soundfile",
+        "pytorch_lightning",
+        "wandb"
         # "causal_conv1d>=1.4.0",
     ],
 )
