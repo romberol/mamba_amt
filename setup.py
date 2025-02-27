@@ -376,7 +376,8 @@ setup(
         "mido",
         "soundfile",
         "pytorch_lightning",
-        "wandb"
+        "wandb",
+        "audiomentations"
         # "causal_conv1d>=1.4.0",
     ],
 )

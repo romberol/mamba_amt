@@ -14,14 +14,18 @@ from .mel import MelSpectrogram
 import librosa
 from torch.utils.data import DataLoader
 
+from audiomentations import Compose, SevenBandParametricEQ, PitchShift
+import soundfile as sf
+
 
 class PianoRollAudioDataset(Dataset):
-    def __init__(self, path, groups=None, sequence_length=None, seed=42, device=DEFAULT_DEVICE):
+    def __init__(self, path, groups=None, sequence_length=None, seed=42, device=DEFAULT_DEVICE, augment=False):
         self.path = path
         self.groups = groups if groups is not None else self.available_groups()
         self.sequence_length = sequence_length
         self.device = device
         self.random = np.random.RandomState(seed)
+        self.augment = augment
 
         self.data = []
         print(f"Loading {len(groups)} group{'s' if len(groups) > 1 else ''} "
@@ -29,6 +33,12 @@ class PianoRollAudioDataset(Dataset):
         for group in groups:
             for input_files in tqdm(self.files(group), desc='Loading group %s' % group):
                 self.data.append(self.load(*input_files))
+        
+        if self.augment:
+            self.augmentations = Compose([
+                SevenBandParametricEQ(min_gain_db=-10, max_gain_db=5, p=0.5),
+                PitchShift(min_semitones=-0.1, max_semitones=0.1, p=0.5)
+            ])
 
     def __getitem__(self, index):
         data = self.data[index]
@@ -43,15 +53,20 @@ class PianoRollAudioDataset(Dataset):
             begin = step_begin * HOP_LENGTH
             end = begin + self.sequence_length
 
-            result['audio'] = data['audio'][begin:end].to(self.device)
+            result['audio'] = data['audio'][begin:end]
             result['label'] = data['label'][step_begin:step_end, :].to(self.device)
             result['velocity'] = data['velocity'][step_begin:step_end, :].to(self.device)
         else:
-            result['audio'] = data['audio'].to(self.device)
+            result['audio'] = data['audio']
             result['label'] = data['label'].to(self.device)
             result['velocity'] = data['velocity'].to(self.device).float()
 
-        result['audio'] = result['audio'].float().div_(32768.0)
+        if self.augment:
+            augmented_audio = self.augmentations(samples=result['audio'].numpy().astype(np.float32) / 32768.0, sample_rate=SAMPLE_RATE)
+            result['audio'] = torch.from_numpy(augmented_audio).to(self.device)
+        else:
+            result['audio'] = result['audio'].float().div_(32768.0).to(self.device)
+        
         result['onset'] = (result['label'] == 3).float()
         result['offset'] = (result['label'] == 1).float()
         result['frame'] = (result['label'] > 1).float()
@@ -99,12 +114,10 @@ class PianoRollAudioDataset(Dataset):
             return torch.load(saved_data_path)
 
         audio, sr = soundfile.read(audio_path, dtype='int16')
-        print("Audio shape: ", audio.shape)
         if audio.ndim > 1:
             audio = np.mean(audio, axis=1).astype(np.int16)  # Convert stereo to mono
         if sr != SAMPLE_RATE:
             audio = librosa.resample(audio.astype(float), orig_sr=sr, target_sr=SAMPLE_RATE).astype(np.int16)
-        print("resampled Audio shape: ", audio.shape)
 
         audio = torch.ShortTensor(audio)
         audio_length = len(audio)
@@ -138,8 +151,8 @@ class PianoRollAudioDataset(Dataset):
 
 class MAESTRO(PianoRollAudioDataset):
 
-    def __init__(self, path='data/MAESTRO', groups=None, sequence_length=None, seed=42, device=DEFAULT_DEVICE):
-        super().__init__(path, groups if groups is not None else ['train'], sequence_length, seed, device)
+    def __init__(self, path='data/MAESTRO', groups=None, sequence_length=None, seed=42, device=DEFAULT_DEVICE, augment=False):
+        super().__init__(path, groups if groups is not None else ['train'], sequence_length, seed, device, augment)
 
     @classmethod
     def available_groups(cls):
@@ -218,23 +231,8 @@ def parse_midi(path):
 
 
 if __name__ == "__main__":
-    melspectrogram = MelSpectrogram(
-        n_mels=N_MELS,
-        sample_rate=SAMPLE_RATE,
-        filter_length=WINDOW_LENGTH,
-        hop_length=HOP_LENGTH,
-        mel_fmin=MEL_FMIN,
-        mel_fmax=MEL_FMAX
-    ).to(DEFAULT_DEVICE)
-    dataset = MAESTRO(path="datasets/maestro-2004", sequence_length=327680, groups=['2004'])
+    dataset = MAESTRO(path="datasets/maestro-v3.0.0", sequence_length=327680, groups=['2006'], augment=True)
     loader = DataLoader(dataset, batch_size=4, shuffle=False)
 
     print(len(loader))
     sample = next(iter(loader))
-    print(sample['audio'].shape, sample['label'].shape, sample['velocity'].shape)
-
-    audio = sample['audio']
-    audio = audio[:, :-1]
-    mel1 = melspectrogram(audio).transpose(-1, -2)
-    print(mel1.shape)
-    
