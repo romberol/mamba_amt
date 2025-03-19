@@ -28,7 +28,11 @@ dependencies = [
     "mido",
     "librosa",
     "soundfile",
-    "pandas"
+    "pandas",
+    "pytorch_lightning",
+    "wandb",
+    "pillow",
+    "mir_eval"
 ]
 [project.urls]
 Repository = "https://github.com/state-spaces/mamba"
