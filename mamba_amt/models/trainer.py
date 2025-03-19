@@ -5,7 +5,7 @@ from ..data.constants import *
 from .modules import Transcriber
 import torch.nn.functional as F
 
-class AMT_Trainer(pl.LightningModule):
+class Mamba_AMT(pl.LightningModule):
     def __init__(self, model_config, lr):
         super().__init__()
         self.melspectrogram = MelSpectrogram(
@@ -21,9 +21,9 @@ class AMT_Trainer(pl.LightningModule):
         self.model = Transcriber(**model_config)
         self.lr = lr
 
-    def forward(self, audio):
+    def forward(self, audio, **mamba_kwargs):
         mel = self.melspectrogram(audio).transpose(-1, -2)
-        return self.model(mel)
+        return self.model(mel, **mamba_kwargs)
     
     def run_on_batch(self, batch, log_name='loss'):
         audio = batch['audio'][:, :-1]

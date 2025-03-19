@@ -1,2 +1,2 @@
-from .trainer import AMT_Trainer
+from .trainer import Mamba_AMT
 from .modules import Transcriber

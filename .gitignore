@@ -6,3 +6,5 @@ build/
 *_hip.*
 wandb/
 datasets/
+piano-transcription/
+output/

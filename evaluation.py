@@ -1,7 +1,7 @@
 from mamba_amt.inference.midi_utils import extract_notes, notes_to_frames, midi_to_hz
 from mamba_amt.data.constants import *
 from mamba_amt.data import MAESTRO
-from mamba_amt.models import AMT_Trainer
+from mamba_amt.models import Mamba_AMT
 
 from mir_eval.multipitch import evaluate as evaluate_frames
 from mir_eval.transcription import precision_recall_f1_overlap as evaluate_notes
@@ -14,6 +14,7 @@ from collections import defaultdict
 import sys
 import argparse
 from tqdm import tqdm
+import json
 
 
 def evaluate(reference, predictions, onset_threshold=0.5, frame_threshold=0.5):
@@ -77,26 +78,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('ckpt_path', type=str)
     parser.add_argument('--dataset_path', default='datasets/maestro-v3.0.0')
-    parser.add_argument('--groups', nargs='?')
-    parser.add_argument('--save-path', default=None)
-    parser.add_argument('--sequence-length', default=327680, type=int)
+    parser.add_argument('-g', '--groups', nargs='?')
     parser.add_argument('--onset-threshold', default=0.5, type=float)
     parser.add_argument('--frame-threshold', default=0.5, type=float)
     args = parser.parse_args()
 
-    dataset = MAESTRO(path=args.dataset_path, sequence_length=args.sequence_length, groups=[args.groups])
+    config = json.load(open("mamba_amt/configs/mamba_amt.json", "r"))
+    model_config = config['model']
+    training_config = config['training']
+
+    dataset = MAESTRO(path=args.dataset_path, sequence_length=training_config["sequence_length"], groups=[args.groups])
     loader = DataLoader(dataset, batch_size=1, shuffle=False)
 
-    model_config = {
-        'mamba_blocks': 1,  # number of mamba blocks
-        'd_model': 256,     # model dimension
-        'd_state': 64,      # B anc C dimensions
-        'd_conv': 4,        # local convolution width
-        'expand': 2 ,       # block expansion factor
-        'out_features': 88
-    }
-
-    model = AMT_Trainer.load_from_checkpoint(args.ckpt_path, model_config=model_config, lr=1e-3)
+    model = Mamba_AMT.load_from_checkpoint(args.ckpt_path, model_config=model_config, lr=1e-3)
     all_metrics = defaultdict(list)
     for batch in tqdm(loader):
         with torch.no_grad():

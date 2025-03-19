@@ -1,0 +1,21 @@
+{
+    "model": {
+        "mamba_blocks": 4,
+        "out_features": 88,
+        "bidirectional": true,
+        "use_skip": true,
+        "mamba_config": {
+            "d_model": 256,
+            "d_state": 64,
+            "d_conv": 4,    
+            "expand": 2 
+        }
+    },
+    "training": {
+        "sequence_length": 163840,
+        "batch_size": 32,
+        "lr": 5e-4,
+        "num_epochs": 600,
+        "save_every_n_epochs": 200
+    }
+}
