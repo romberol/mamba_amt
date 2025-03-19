@@ -17,12 +17,18 @@ classifiers = [
 ]
 dependencies = [
     "torch",
+    "torchaudio",
     "triton",
     "ninja",
     "einops",
     "transformers",
     "packaging",
     "setuptools>=61.0.0",
+    "audiomentations",
+    "mido",
+    "librosa",
+    "soundfile",
+    "pandas"
 ]
 [project.urls]
 Repository = "https://github.com/state-spaces/mamba"

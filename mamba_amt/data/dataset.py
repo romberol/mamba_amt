@@ -1,4 +1,3 @@
-import json
 import os
 from abc import abstractmethod
 from glob import glob
@@ -10,12 +9,11 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 
 from .constants import *
-from .mel import MelSpectrogram
 import librosa
 from torch.utils.data import DataLoader
 
 from audiomentations import Compose, SevenBandParametricEQ, PitchShift
-import soundfile as sf
+import pandas as pd
 
 
 class PianoRollAudioDataset(Dataset):
@@ -171,11 +169,11 @@ class MAESTRO(PianoRollAudioDataset):
             if len(files) == 0:
                 raise RuntimeError(f'Group {group} is empty')
         else:
-            metadata = json.load(open(os.path.join(self.path, 'maestro-v1.0.0.json')))
-            files = sorted([(os.path.join(self.path, row['audio_filename'].replace('.wav', '.flac')),
-                             os.path.join(self.path, row['midi_filename'])) for row in metadata if row['split'] == group])
-
-            files = [(audio if os.path.exists(audio) else audio.replace('.flac', '.wav'), midi) for audio, midi in files]
+            metadata = pd.read_csv(os.path.join(self.path, 'maestro-v3.0.0.csv'))
+            files = sorted([
+                (os.path.join(self.path, row.audio_filename), os.path.join(self.path, row.midi_filename))
+                for _, row in metadata[metadata.split == group].iterrows()
+            ])
 
         result = []
         for audio_path, midi_path in files:

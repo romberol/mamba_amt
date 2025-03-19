@@ -368,6 +368,7 @@ setup(
     python_requires=">=3.9",
     install_requires=[
         "torch",
+        "torchaudio",
         "packaging",
         "ninja",
         "einops",
@@ -377,7 +378,10 @@ setup(
         "soundfile",
         "pytorch_lightning",
         "wandb",
-        "audiomentations"
+        "audiomentations",
+        "mido",
+        "librosa",
+        "pandas"
         # "causal_conv1d>=1.4.0",
     ],
 )
