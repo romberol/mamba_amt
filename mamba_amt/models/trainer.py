@@ -6,7 +6,7 @@ from .modules import Transcriber
 import torch.nn.functional as F
 
 class Mamba_AMT(pl.LightningModule):
-    def __init__(self, model_config, lr):
+    def __init__(self, model_config, start_lr=5e-4, end_lr=5e-5, max_epochs=100):
         super().__init__()
         self.melspectrogram = MelSpectrogram(
             n_mels=N_MELS,
@@ -19,7 +19,9 @@ class Mamba_AMT(pl.LightningModule):
 
         model_config['input_features'] = N_MELS
         self.model = Transcriber(**model_config)
-        self.lr = lr
+        self.start_lr = start_lr
+        self.end_lr = end_lr
+        self.max_epochs = max_epochs
 
     def forward(self, audio, **mamba_kwargs):
         mel = self.melspectrogram(audio).transpose(-1, -2)
@@ -63,4 +65,8 @@ class Mamba_AMT(pl.LightningModule):
         self.log_dict(losses, prog_bar=True, on_step=False, on_epoch=True)
         
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.lr)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.start_lr)
+        scheduler = torch.optim.lr_scheduler.LinearLR(
+            optimizer, start_factor=1.0, end_factor=self.end_lr / self.start_lr, total_iters=self.max_epochs
+        )
+        return [optimizer], [scheduler]

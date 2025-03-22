@@ -19,7 +19,7 @@ if __name__ == "__main__":
     
     # checkpoint_path = "piano-transcription/61pnybxp/checkpoints/epoch=399-step=3200.ckpt"
     checkpoint_path = None
-    model = Mamba_AMT(model_config, lr=training_config["lr"])
+    model = Mamba_AMT(model_config, start_lr=training_config["start_lr"], end_lr=training_config["end_lr"], max_epochs=training_config["num_epochs"])
 
     ckpt_callback = pl.callbacks.ModelCheckpoint(every_n_train_steps=len(train_loader) * training_config["save_every_n_epochs"], 
                                                  save_top_k=1)

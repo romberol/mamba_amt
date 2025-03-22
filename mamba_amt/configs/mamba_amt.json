@@ -2,7 +2,7 @@
     "model": {
         "mamba_blocks": 4,
         "out_features": 88,
-        "bidirectional": true,
+        "bidirectional": false,
         "use_skip": true,
         "mamba_config": {
             "d_model": 256,
@@ -14,8 +14,9 @@
     "training": {
         "sequence_length": 163840,
         "batch_size": 32,
-        "lr": 5e-4,
-        "num_epochs": 600,
+        "start_lr": 5e-4,
+        "end_lr": 5e-5,
+        "num_epochs": 100,
         "save_every_n_epochs": 200
     }
 }
