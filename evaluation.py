@@ -81,7 +81,10 @@ if __name__ == "__main__":
     parser.add_argument('-g', '--groups', nargs='?')
     parser.add_argument('--onset-threshold', default=0.5, type=float)
     parser.add_argument('--frame-threshold', default=0.5, type=float)
+    parser.add_argument('-s', '--seed', default=0, type=int)
     args = parser.parse_args()
+
+    torch.manual_seed(args.seed)
 
     config = json.load(open("mamba_amt/configs/mamba_amt.json", "r"))
     model_config = config['model']

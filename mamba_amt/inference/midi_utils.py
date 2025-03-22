@@ -65,6 +65,8 @@ def notes_to_frames(pitches, intervals, shape):
     Returns:
         tuple: (time, freqs)
     """
+    if len(shape) == 3:
+        shape = shape[1:]
     roll = np.zeros(tuple(shape))
     for pitch, (onset, offset) in zip(pitches, intervals):
         roll[onset:offset, pitch] = 1
