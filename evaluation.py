@@ -77,7 +77,7 @@ def evaluate(reference, predictions, onset_threshold=0.5, frame_threshold=0.5):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('ckpt_path', type=str)
-    parser.add_argument('--dataset_path', default='datasets/maestro-v3.0.0')
+    parser.add_argument('--dataset_path', default='/workspace/maestro-v3.0.0')
     parser.add_argument('-g', '--groups', nargs='?')
     parser.add_argument('--onset-threshold', default=0.5, type=float)
     parser.add_argument('--frame-threshold', default=0.5, type=float)

@@ -28,11 +28,11 @@ class Mamba_AMT(pl.LightningModule):
         return self.model(mel, **mamba_kwargs)
     
     def run_on_batch(self, batch, log_name='loss'):
-        audio = batch['audio'][:, :-1]
-        onset_label = batch['onset']
-        offset_label = batch['offset']
-        frame_label = batch['frame']
-        velocity_label = batch['velocity']
+        audio = batch['audio'][:, :-1].to(self.device)
+        onset_label = batch['onset'].to(self.device)
+        offset_label = batch['offset'].to(self.device)
+        frame_label = batch['frame'].to(self.device)
+        velocity_label = batch['velocity'].to(self.device)
         
         onset_pred, offset_pred, frame_pred, velocity_pred = self(audio)
 

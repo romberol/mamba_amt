@@ -52,18 +52,18 @@ class PianoRollAudioDataset(Dataset):
             end = begin + self.sequence_length
 
             result['audio'] = data['audio'][begin:end]
-            result['label'] = data['label'][step_begin:step_end, :].to(self.device)
-            result['velocity'] = data['velocity'][step_begin:step_end, :].to(self.device)
+            result['label'] = data['label'][step_begin:step_end, :]
+            result['velocity'] = data['velocity'][step_begin:step_end, :]
         else:
             result['audio'] = data['audio']
-            result['label'] = data['label'].to(self.device)
-            result['velocity'] = data['velocity'].to(self.device).float()
+            result['label'] = data['label']
+            result['velocity'] = data['velocity'].float()
 
         if self.augment:
             augmented_audio = self.augmentations(samples=result['audio'].numpy().astype(np.float32) / 32768.0, sample_rate=SAMPLE_RATE)
-            result['audio'] = torch.from_numpy(augmented_audio).to(self.device)
+            result['audio'] = torch.from_numpy(augmented_audio)
         else:
-            result['audio'] = result['audio'].float().div_(32768.0).to(self.device)
+            result['audio'] = result['audio'].float().div_(32768.0)
         
         result['onset'] = (result['label'] == 3).float()
         result['offset'] = (result['label'] == 1).float()
