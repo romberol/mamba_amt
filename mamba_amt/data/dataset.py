@@ -12,12 +12,13 @@ from .constants import *
 import librosa
 from torch.utils.data import DataLoader
 
-from audiomentations import Compose, SevenBandParametricEQ, PitchShift
+from audiomentations import Compose, SevenBandParametricEQ, PitchShift, AddBackgroundNoise, PolarityInversion, ApplyImpulseResponse
 import pandas as pd
 
 
 class PianoRollAudioDataset(Dataset):
-    def __init__(self, path, groups=None, sequence_length=None, seed=42, device=DEFAULT_DEVICE, augment=False):
+    def __init__(self, path, groups=None, sequence_length=None, seed=42, device=DEFAULT_DEVICE, augment=False,
+                 noise_path=None, ir_path=None):
         self.path = path
         self.groups = groups if groups is not None else self.available_groups()
         self.sequence_length = sequence_length
@@ -35,7 +36,16 @@ class PianoRollAudioDataset(Dataset):
         if self.augment:
             self.augmentations = Compose([
                 SevenBandParametricEQ(min_gain_db=-10, max_gain_db=5, p=0.5),
-                PitchShift(min_semitones=-0.1, max_semitones=0.1, p=0.5)
+                PitchShift(min_semitones=-0.1, max_semitones=0.1, p=0.5),
+                AddBackgroundNoise(
+                    sounds_path=noise_path,
+                    min_snr_db=17.5,
+                    max_snr_db=25,
+                    noise_transform=PolarityInversion(),
+                    p=0.5
+                ),
+                SevenBandParametricEQ(min_gain_db=-10, max_gain_db=5, p=0.5),
+                ApplyImpulseResponse(ir_path=ir_path, p=0.3)
             ])
 
     def __getitem__(self, index):
@@ -57,7 +67,7 @@ class PianoRollAudioDataset(Dataset):
         else:
             result['audio'] = data['audio']
             result['label'] = data['label']
-            result['velocity'] = data['velocity'].float()
+            result['velocity'] = data['velocity']
 
         if self.augment:
             augmented_audio = self.augmentations(samples=result['audio'].numpy().astype(np.float32) / 32768.0, sample_rate=SAMPLE_RATE)
@@ -149,8 +159,10 @@ class PianoRollAudioDataset(Dataset):
 
 class MAESTRO(PianoRollAudioDataset):
 
-    def __init__(self, path='data/MAESTRO', groups=None, sequence_length=None, seed=42, device=DEFAULT_DEVICE, augment=False):
-        super().__init__(path, groups if groups is not None else ['train'], sequence_length, seed, device, augment)
+    def __init__(self, path='data/MAESTRO', groups=None, sequence_length=None, seed=42, device=DEFAULT_DEVICE, 
+                 augment=False, noise_path=None, ir_path=None):
+        super().__init__(path, groups if groups is not None else ['train'], sequence_length, seed, device, 
+                         augment, noise_path, ir_path)
 
     @classmethod
     def available_groups(cls):

@@ -18,5 +18,10 @@
         "end_lr": 5e-5,
         "num_epochs": 100,
         "save_every_n_epochs": 200
+    },
+    "datasets": {
+        "path": "datasets/maestro-v3.0.0",
+        "noise_path": "datasets/noise",
+        "ir_path": "datasets/EchoThiefImpulseResponseLibrary"
     }
 }

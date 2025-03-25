@@ -25,7 +25,16 @@ class Mamba_AMT(pl.LightningModule):
 
     def forward(self, audio, **mamba_kwargs):
         mel = self.melspectrogram(audio).transpose(-1, -2)
-        return self.model(mel, **mamba_kwargs)
+        onset_pred, offset_pred, frame_pred, velocity_pred = self.model(mel, **mamba_kwargs)
+
+        predicitons = {
+            'onset': onset_pred,
+            'offset': offset_pred,
+            'frame': frame_pred,
+            'velocity': velocity_pred
+        }
+
+        return predicitons
     
     def run_on_batch(self, batch, log_name='loss'):
         audio = batch['audio'][:, :-1].to(self.device)
@@ -34,20 +43,13 @@ class Mamba_AMT(pl.LightningModule):
         frame_label = batch['frame'].to(self.device)
         velocity_label = batch['velocity'].to(self.device)
         
-        onset_pred, offset_pred, frame_pred, velocity_pred = self(audio)
-
-        predicitons = {
-            'onset': onset_pred,
-            'offset': offset_pred,
-            'frame': frame_pred,
-            'velocity': velocity_pred
-        }
+        predicitons = self(audio)
         
         losses = {
-            f'{log_name}/onset': F.binary_cross_entropy(onset_pred, onset_label),
-            f'{log_name}/offset': F.binary_cross_entropy(offset_pred, offset_label),
-            f'{log_name}/frame': F.binary_cross_entropy(frame_pred, frame_label),
-            f'{log_name}/velocity': F.mse_loss(velocity_pred, velocity_label)
+            f'{log_name}/onset': F.binary_cross_entropy(predicitons['onset'], onset_label),
+            f'{log_name}/offset': F.binary_cross_entropy(predicitons['offset'], offset_label),
+            f'{log_name}/frame': F.binary_cross_entropy(predicitons['frame'], frame_label),
+            f'{log_name}/velocity': F.mse_loss(predicitons['velocity'], velocity_label)
         }
 
         return predicitons, losses

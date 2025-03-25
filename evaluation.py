@@ -74,6 +74,28 @@ def evaluate(reference, predictions, onset_threshold=0.5, frame_threshold=0.5):
 
     return metrics
 
+def windowed_inference(model, batch, window_size):
+    audio = batch['audio']
+    audio_len = audio.shape[-1]
+    window_size = window_size // HOP_LENGTH * HOP_LENGTH
+
+    all_predictions = {'onset': [], 'offset': [], 'frame': [], 'velocity': []}
+
+    for start in range(0, audio_len, window_size):
+        end = min(start + window_size, audio_len)            
+        segment = audio[..., start:end-1].to(model.device)
+
+        with torch.no_grad():
+            preds = model(segment)
+
+        for key in all_predictions:
+            all_predictions[key].append(preds[key][0])
+
+    for key in all_predictions:
+        all_predictions[key] = torch.cat(all_predictions[key], dim=0)
+
+    return all_predictions
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('ckpt_path', type=str)
@@ -89,15 +111,15 @@ if __name__ == "__main__":
     config = json.load(open("mamba_amt/configs/mamba_amt.json", "r"))
     model_config = config['model']
     training_config = config['training']
+    dataset_config = config['dataset']
 
-    dataset = MAESTRO(path=args.dataset_path, sequence_length=training_config["sequence_length"], groups=[args.groups])
+    dataset = MAESTRO(**dataset_config, sequence_length=None, groups=[args.groups])
     loader = DataLoader(dataset, batch_size=1, shuffle=False)
 
-    model = Mamba_AMT.load_from_checkpoint(args.ckpt_path, model_config=model_config, lr=1e-3)
+    model = Mamba_AMT.load_from_checkpoint(args.ckpt_path, model_config=model_config)
     all_metrics = defaultdict(list)
     for batch in tqdm(loader):
-        with torch.no_grad():
-            predictions, loss = model.run_on_batch(batch)
+        predictions = windowed_inference(model, batch, training_config["sequence_length"])
         metrics = evaluate(batch, predictions, args.onset_threshold, args.frame_threshold)
 
         for key, value in metrics.items():

@@ -9,11 +9,12 @@ if __name__ == "__main__":
     config = json.load(open("mamba_amt/configs/mamba_amt.json", "r"))
     model_config = config['model']
     training_config = config['training']
+    dataset_config = config['dataset']
 
     wandb_logger = pl.loggers.WandbLogger(project="piano-transcription")
 
-    train_dataset = MAESTRO(path="/workspace/maestro-v3.0.0", sequence_length=training_config["sequence_length"], groups=['train'], augment=False)
-    val_dataset = MAESTRO(path="/workspace/maestro-v3.0.0", sequence_length=training_config["sequence_length"], groups=['validation'])
+    train_dataset = MAESTRO(**dataset_config, sequence_length=training_config["sequence_length"], groups=['train'], augment=True)
+    val_dataset = MAESTRO(**dataset_config, sequence_length=training_config["sequence_length"], groups=['validation'])
     train_loader = DataLoader(train_dataset, batch_size=training_config["batch_size"], shuffle=True, num_workers=4, persistent_workers=True)
     val_dataset = DataLoader(val_dataset, batch_size=training_config["batch_size"], shuffle=False, num_workers=4, persistent_workers=True)
     
