@@ -2,8 +2,9 @@
     "model": {
         "mamba_blocks": 4,
         "out_features": 88,
-        "bidirectional": false,
+        "bidirectional_cfg": null,
         "use_skip": true,
+        "with_ff": true,
         "mamba_config": {
             "d_model": 256,
             "d_state": 64,
@@ -19,7 +20,7 @@
         "num_epochs": 100,
         "save_every_n_epochs": 200
     },
-    "datasets": {
+    "dataset": {
         "path": "datasets/maestro-v3.0.0",
         "noise_path": "datasets/noise",
         "ir_path": "datasets/EchoThiefImpulseResponseLibrary"

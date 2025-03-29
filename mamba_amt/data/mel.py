@@ -26,14 +26,14 @@ class MelSpectrogram(torch.nn.Module):
             n_fft=filter_length,
             win_length=win_length,
             hop_length=hop_length,
+            pad_mode='constant',
+            n_mels=n_mels,
             f_min=mel_fmin,
             f_max=mel_fmax,
-            n_mels=n_mels,
             window_fn=torch.hann_window,   # use Hann window
             power=1.0,                     # use magnitude (not power) spectrogram
             center=True,
-            pad_mode='reflect',
-            mel_scale='htk'                # use HTK mel scale (as in librosa with htk=True)
+            norm='slaney'
         )
 
     def forward(self, y):

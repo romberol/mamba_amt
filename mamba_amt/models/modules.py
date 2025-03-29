@@ -4,7 +4,7 @@ from torch import nn
 from mamba_ssm import Mamba
 
 class ConvStack(nn.Module):
-    def __init__(self, input_features, output_features, dropout=0.25):
+    def __init__(self, input_features, output_features, dropout=0.1):
         super().__init__()
 
         # input is batch_size * 1 channel * frames * input_features
@@ -37,34 +37,73 @@ class ConvStack(nn.Module):
         x = self.fc(x)
         return x
 
-class BiMamba(nn.Module):
-    def __init__(self, d_model, d_state, d_conv, expand, layer_idx):
+    
+class MambaBlock(nn.Module):
+    def __init__(self, mamba_config, bidirectional_cfg, with_ff):
+        """
+        Args:
+        - mamba_config (dict): Configuration dictionary for Mamba layer initialization.
+        - bidirectional_cfg (dict, optional): Configuration for bidirectional processing.
+            Possible keys:
+                - 'shared' (bool): Whether forward and backward Mamba layers share weights.
+                - 'concat' (bool): Whether to concatenate forward and backward outputs.
+            Defaults to None (unidirectional).
+        - with_ff (bool, optional): Whether to include a feed-forward network after the Mamba layer.
+            Defaults to True.
+        """
         super().__init__()
-        self.d_model = d_model
-        
-        self.mamba = Mamba(d_model=d_model, d_state=d_state, d_conv=d_conv, expand=expand, layer_idx=layer_idx)
+        assert mamba_config is not None, "Mamba config must be provided"
+        self.d_model = mamba_config['d_model']
 
-        self.norm = nn.LayerNorm(d_model)
-        self.ff = nn.Sequential(
-            nn.Linear(d_model, d_model * 4),
-            nn.GELU(),
-            nn.Linear(d_model * 4, d_model)
-        )
+        self.mamba_forward = Mamba(**mamba_config)
 
-    def forward(self, x):      
-        forward_inp = x
-        backward_inp = torch.flip(x, dims=[1])
+        self.bidirectional_cfg = bidirectional_cfg or {}
+        self.bidirectional = bool(bidirectional_cfg)
 
-        forward_out = self.mamba(forward_inp)
-        backward_out = self.mamba(backward_inp)
-        backward_out = torch.flip(backward_out, dims=[1])
+        if self.bidirectional:
+            if self.bidirectional_cfg.get('shared', False):
+                self.mamba_backward = self.mamba_forward
+            else:
+                self.mamba_backward = Mamba(**mamba_config)
 
-        mamba_out = forward_out + backward_out
-        
-        mamba_out = self.norm(mamba_out)
-        out = self.ff(mamba_out)
+        self.pre_norm = nn.LayerNorm(self.d_model)
 
-        return out
+        self.with_ff = with_ff
+        if self.with_ff:
+            ff_input_dim = self.d_model * 2 if self.bidirectional_cfg.get('concat', False) else self.d_model
+            self.ff = nn.Sequential(
+                nn.LayerNorm(ff_input_dim),
+                nn.Linear(ff_input_dim, self.d_model * 4),
+                nn.GELU(),
+                nn.Linear(self.d_model * 4, self.d_model)
+            )
+
+    def _apply_mamba(self, x):
+        if self.bidirectional:
+            forward_out = self.mamba_forward(x)
+            backward_out = self.mamba_backward(torch.flip(x, dims=[1]))
+            backward_out = torch.flip(backward_out, dims=[1])
+
+            if self.bidirectional_cfg.get('concat', False):
+                return torch.cat([forward_out, backward_out], dim=-1)
+            else:
+                return forward_out + backward_out
+        else:
+            return self.mamba_forward(x)
+
+    def forward(self, x):
+        residual = x
+        x_norm = self.pre_norm(x)
+
+        x_out = self._apply_mamba(x_norm)
+
+        if self.bidirectional_cfg.get('concat', False):
+            residual = residual.repeat(1, 1, 2)
+
+        if self.with_ff:
+            x_out = self.ff(x_out + residual)
+
+        return x_out
 
 
 class Transcriber(nn.Module):
@@ -73,9 +112,10 @@ class Transcriber(nn.Module):
             input_features: int, 
             out_features: int, 
             mamba_blocks: int,
-            bidirectional: bool,
+            bidirectional_cfg: dict,
             mamba_config: dict,
-            use_skip: bool
+            use_skip: bool,
+            with_ff: bool,
     ):
         super().__init__()
         assert mamba_config is not None, "Mamba config must be provided"
@@ -83,33 +123,39 @@ class Transcriber(nn.Module):
         self.use_skip = use_skip
 
         self.conv_stack = ConvStack(input_features=input_features, output_features=d_model)
-        self.conv_norm = nn.LayerNorm(d_model)
 
-        self.mamba_layers = nn.ModuleList()
-        self.norm_layers = nn.ModuleList()
+        self.mamba_layers = nn.ModuleList([
+            MambaBlock(mamba_config=mamba_config, bidirectional_cfg=bidirectional_cfg, with_ff=with_ff)
+            for _ in range(mamba_blocks)
+        ])
 
-        for i in range(mamba_blocks):
-            if bidirectional:
-                block = BiMamba(layer_idx=i, **mamba_config)
-            else:
-                block = Mamba(layer_idx=i, **mamba_config)
-            
-            self.mamba_layers.append(block)
-            self.norm_layers.append(nn.LayerNorm(d_model))
-        
-        self.onset = nn.Linear(d_model, out_features)
-        self.offset = nn.Linear(d_model, out_features)
-        self.frame = nn.Linear(d_model, out_features)
-        self.velocity = nn.Linear(d_model, out_features)
+        self.onset = nn.Sequential(
+            nn.LayerNorm(d_model),
+            Mamba(**mamba_config),
+            nn.Linear(d_model, out_features)
+        )
+        self.offset = nn.Sequential(
+            nn.LayerNorm(d_model),
+            Mamba(**mamba_config),
+            nn.Linear(d_model, out_features)
+        )
+        self.frame = nn.Sequential(
+            nn.LayerNorm(d_model),
+            Mamba(**mamba_config),
+            nn.Linear(d_model, out_features)
+        )
+        self.velocity = nn.Sequential(
+            nn.LayerNorm(d_model),
+            Mamba(**mamba_config),
+            nn.Linear(d_model, out_features)
+        )
 
     def forward(self, x, **mamba_kwargs):
         x = self.conv_stack(x)
-        x = self.conv_norm(x)
 
-        for mamba_block, norm in zip(self.mamba_layers, self.norm_layers):
+        for mamba_block in self.mamba_layers:
             residual = x if self.use_skip else None
             x = mamba_block(x, **mamba_kwargs)
-            x = norm(x)
             if self.use_skip:
                 x = x + residual
 
