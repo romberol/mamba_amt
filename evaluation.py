@@ -74,27 +74,41 @@ def evaluate(reference, predictions, onset_threshold=0.5, frame_threshold=0.5):
 
     return metrics
 
-def windowed_inference(model, batch, window_size):
+
+def windowed_inference(model, batch, window_size, overlap_ratio=0.5):
     audio = batch['audio']
     audio_len = audio.shape[-1]
+
     window_size = window_size // HOP_LENGTH * HOP_LENGTH
+    overlap = int(window_size * overlap_ratio)
+    step = window_size - overlap
 
     all_predictions = {'onset': [], 'offset': [], 'frame': [], 'velocity': []}
 
-    for start in range(0, audio_len, window_size):
-        end = min(start + window_size, audio_len)            
-        segment = audio[..., start:end-1].to(model.device)
+    combined_predictions = {}
+    for key in all_predictions:
+        combined_predictions[key] = torch.zeros((audio_len // HOP_LENGTH + 1, 88), device=model.device)
+        weight_sum = torch.zeros((audio_len // HOP_LENGTH + 1, 88), device=model.device)
+
+    for start in range(0, audio_len, step):
+        end = min(start + window_size, audio_len)
+        segment = audio[..., start:end].to(model.device)
 
         with torch.no_grad():
             preds = model(segment)
 
+        segment_len_frames = preds['frame'].shape[1]
+        frame_start = start // HOP_LENGTH
+        frame_end = frame_start + segment_len_frames
+
         for key in all_predictions:
-            all_predictions[key].append(preds[key][0])
+            combined_predictions[key][frame_start:frame_end] += preds[key][0]
+        weight_sum[frame_start:frame_end] += 1
 
-    for key in all_predictions:
-        all_predictions[key] = torch.cat(all_predictions[key], dim=0)
+    for key in combined_predictions:
+        combined_predictions[key] /= weight_sum
 
-    return all_predictions
+    return combined_predictions
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -104,6 +118,7 @@ if __name__ == "__main__":
     parser.add_argument('--onset-threshold', default=0.5, type=float)
     parser.add_argument('--frame-threshold', default=0.5, type=float)
     parser.add_argument('-s', '--seed', default=0, type=int)
+    parser.add_argument('-f', '--full-tracks', action='store_true', default=False, help='Evaluate on full tracks.')
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
@@ -113,13 +128,16 @@ if __name__ == "__main__":
     training_config = config['training']
     dataset_config = config['dataset']
 
-    dataset = MAESTRO(**dataset_config, sequence_length=None, groups=[args.groups])
+    dataset = MAESTRO(**dataset_config, sequence_length=None if args.full_tracks else training_config["sequence_length"], groups=[args.groups])
     loader = DataLoader(dataset, batch_size=1, shuffle=False)
 
     model = Mamba_AMT.load_from_checkpoint(args.ckpt_path, model_config=model_config)
     all_metrics = defaultdict(list)
     for batch in tqdm(loader):
-        predictions = windowed_inference(model, batch, training_config["sequence_length"])
+        if args.full_tracks:
+            predictions = windowed_inference(model, batch, training_config["sequence_length"] * 3)
+        else:
+            predictions, loss = model.run_on_batch(batch)
         metrics = evaluate(batch, predictions, args.onset_threshold, args.frame_threshold)
 
         for key, value in metrics.items():
