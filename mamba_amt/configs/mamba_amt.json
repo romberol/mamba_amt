@@ -1,6 +1,6 @@
 {
     "model": {
-        "mamba_blocks": 4,
+        "mamba_blocks": 6,
         "out_features": 88,
         "bidirectional_cfg": null,
         "use_skip": true,
@@ -9,7 +9,7 @@
             "d_model": 256,
             "d_state": 64,
             "d_conv": 4,    
-            "expand": 2 
+            "expand": 4
         }
     },
     "training": {

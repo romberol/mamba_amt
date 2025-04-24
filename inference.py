@@ -1,43 +1,72 @@
-from mamba_amt.data import MAESTRO
-from mamba_amt.models import AMT_Trainer
-from mamba_amt.inference import predictions_to_midi, save_pianoroll
-import soundfile as sf
-import torch
+import argparse
 import os
-import time
+import json
+import torch
+import librosa
 
-train_dataset = MAESTRO(path="datasets/maestro-v3.0.0", sequence_length=327680, groups=['2008'])
+from mamba_amt.models import Mamba_AMT
+from mamba_amt.inference import predictions_to_midi, save_pianoroll, windowed_inference
+from mamba_amt.data.constants import SAMPLE_RATE
 
-sample = train_dataset[1]
-audio = sample["audio"][:-1]
 
-model_config = {
-    'mamba_blocks': 2,  # number of mamba blocks
-    'd_model': 256,     # model dimension
-    'd_state': 64,      # B anc C dimensions
-    'd_conv': 4,        # local convolution width
-    'expand': 2 ,       # block expansion factor
-    'out_features': 88
-}
+def load_audio(audio_path, sample_rate):
+    audio, sr = librosa.load(audio_path, sr=sample_rate, mono=True)
+    if sr != sample_rate:
+        raise ValueError(f"Expected sample rate {sample_rate}, got {sr}")
+    return torch.from_numpy(audio)
 
-out_folder = "output"
-os.makedirs(out_folder, exist_ok=True)
 
-ckpt_path = "piano-transcription/najpvkpn/checkpoints/epoch=599-step=4800.ckpt"
-model = AMT_Trainer.load_from_checkpoint(ckpt_path, model_config=model_config, lr=1e-3)
+def load_model(ckpt_path, config_path="mamba_amt/configs/mamba_amt.json"):
+    with open(config_path, "r") as f:
+        config = json.load(f)
 
-with torch.no_grad():
-    start = time.time()
-    onset_pred, offset_pred, frame_pred, velocity_pred = model(audio.unsqueeze(0))
-    print(f"Time taken: {time.time() - start:.2f}s")
+    model_config = config['model']
+    model = Mamba_AMT.load_from_checkpoint(ckpt_path, model_config=model_config)
+    return model, config['training']
 
-sf.write(os.path.join(out_folder, "sample.wav"), audio.cpu().numpy(), 16000)
-save_pianoroll(os.path.join(out_folder, "sample_pianoroll.png"), sample["onset"], sample["frame"])
 
-predictions_to_midi(os.path.join(out_folder, "predictions.midi"), 
-                    onset_pred, 
-                    frame_pred, 
-                    velocity_pred, 
-                    onset_threshold=0.5, 
-                    frame_threshold=0.5)
-save_pianoroll(os.path.join(out_folder, "predictions.png"), onset_pred[0], frame_pred[0], onset_threshold=0.5, frame_threshold=0.5)
+def run_inference(model, audio_tensor, training_config):
+    batch = {"audio": audio_tensor.unsqueeze(0)}
+    sequence_length = training_config["sequence_length"] * 3
+    return windowed_inference(model, batch, sequence_length)
+
+
+def save_outputs(output_dir, predictions, onset_thresh, frame_thresh):
+    os.makedirs(output_dir, exist_ok=True)
+
+    midi_path = os.path.join(output_dir, "predictions.midi")
+    image_path = os.path.join(output_dir, "predictions.png")
+
+    predictions_to_midi(midi_path,
+                        predictions['onset'],
+                        predictions['frame'],
+                        predictions['velocity'],
+                        onset_threshold=onset_thresh,
+                        frame_threshold=frame_thresh)
+
+    save_pianoroll(image_path,
+                   predictions['onset'],
+                   predictions['frame'],
+                   onset_threshold=onset_thresh,
+                   frame_threshold=frame_thresh)
+
+def main():
+    parser = argparse.ArgumentParser(description="Transcribe piano audio using Mamba-AMT")
+    parser.add_argument("ckpt", type=str, help="Path to checkpoint .ckpt file")
+    parser.add_argument("-a", "--audio", type=str, required=True, help="Path to input audio file (wav/mp3)")
+    parser.add_argument("-o", "--output", type=str, default="./output", help="Directory to save outputs (MIDI and pianoroll)")
+    parser.add_argument("--onset_threshold", type=float, default=0.3, help="Onset probability threshold")
+    parser.add_argument("--frame_threshold", type=float, default=0.5, help="Frame probability threshold")
+
+    args = parser.parse_args()
+
+    model, training_config = load_model(args.ckpt)
+    audio_tensor = load_audio(args.audio, SAMPLE_RATE)
+    predictions = run_inference(model, audio_tensor, training_config)
+    save_outputs(args.output, predictions, args.onset_threshold, args.frame_threshold)
+
+    print(f"Done. Outputs saved to: {args.output}")
+
+
+if __name__ == "__main__":
+    main()

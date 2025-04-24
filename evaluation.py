@@ -2,6 +2,7 @@ from mamba_amt.inference.midi_utils import extract_notes, notes_to_frames, midi_
 from mamba_amt.data.constants import *
 from mamba_amt.data import MAESTRO
 from mamba_amt.models import Mamba_AMT
+from mamba_amt.inference import windowed_inference
 
 from mir_eval.multipitch import evaluate as evaluate_frames
 from mir_eval.transcription import precision_recall_f1_overlap as evaluate_notes
@@ -75,45 +76,10 @@ def evaluate(reference, predictions, onset_threshold=0.5, frame_threshold=0.5):
     return metrics
 
 
-def windowed_inference(model, batch, window_size, overlap_ratio=0.5):
-    audio = batch['audio']
-    audio_len = audio.shape[-1]
-
-    window_size = window_size // HOP_LENGTH * HOP_LENGTH
-    overlap = int(window_size * overlap_ratio)
-    step = window_size - overlap
-
-    all_predictions = {'onset': [], 'offset': [], 'frame': [], 'velocity': []}
-
-    combined_predictions = {}
-    for key in all_predictions:
-        combined_predictions[key] = torch.zeros((audio_len // HOP_LENGTH + 1, 88), device=model.device)
-        weight_sum = torch.zeros((audio_len // HOP_LENGTH + 1, 88), device=model.device)
-
-    for start in range(0, audio_len, step):
-        end = min(start + window_size, audio_len)
-        segment = audio[..., start:end].to(model.device)
-
-        with torch.no_grad():
-            preds = model(segment)
-
-        segment_len_frames = preds['frame'].shape[1]
-        frame_start = start // HOP_LENGTH
-        frame_end = frame_start + segment_len_frames
-
-        for key in all_predictions:
-            combined_predictions[key][frame_start:frame_end] += preds[key][0]
-        weight_sum[frame_start:frame_end] += 1
-
-    for key in combined_predictions:
-        combined_predictions[key] /= weight_sum
-
-    return combined_predictions
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('ckpt_path', type=str)
-    parser.add_argument('--dataset_path', default='/workspace/maestro-v3.0.0')
+    parser.add_argument('--dataset_path', default='/datasets/maestro-v3.0.0')
     parser.add_argument('-g', '--groups', nargs='?')
     parser.add_argument('--onset-threshold', default=0.5, type=float)
     parser.add_argument('--frame-threshold', default=0.5, type=float)
@@ -135,7 +101,7 @@ if __name__ == "__main__":
     all_metrics = defaultdict(list)
     for batch in tqdm(loader):
         if args.full_tracks:
-            predictions = windowed_inference(model, batch, training_config["sequence_length"] * 3)
+            predictions = windowed_inference(model, batch, training_config["sequence_length"] * 3, show_progress=False)
         else:
             predictions, loss = model.run_on_batch(batch)
         metrics = evaluate(batch, predictions, args.onset_threshold, args.frame_threshold)
