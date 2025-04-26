@@ -21,7 +21,10 @@ def load_model(ckpt_path, config_path="mamba_amt/configs/mamba_amt.json"):
         config = json.load(f)
 
     model_config = config['model']
-    model = Mamba_AMT.load_from_checkpoint(ckpt_path, model_config=model_config)
+    model = Mamba_AMT(model_config)
+    model.load_state_dict(torch.load(ckpt_path, map_location="cpu")["state_dict"])
+    model.eval()
+    model.to("cuda")
     return model, config['training']
 
 
@@ -34,8 +37,8 @@ def run_inference(model, audio_tensor, training_config):
 def save_outputs(output_dir, predictions, onset_thresh, frame_thresh):
     os.makedirs(output_dir, exist_ok=True)
 
-    midi_path = os.path.join(output_dir, "predictions.midi")
-    image_path = os.path.join(output_dir, "predictions.png")
+    midi_path = os.path.join(output_dir, "transcription.midi")
+    image_path = os.path.join(output_dir, "pianoroll.png")
 
     predictions_to_midi(midi_path,
                         predictions['onset'],

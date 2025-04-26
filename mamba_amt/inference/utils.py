@@ -3,6 +3,17 @@ from mamba_amt.data.constants import HOP_LENGTH
 from tqdm import tqdm
 
 def windowed_inference(model, batch, window_size, overlap_ratio=0.5, show_progress=True):
+    """
+    Perform windowed inference on the audio data in the batch.
+    The audio is processed in overlapping windows, and the predictions are averaged across the windows.
+
+    Args:
+        model (torch.nn.Module): The model to use for inference.
+        batch (dict): A dictionary containing the audio data.
+        window_size (int): The size of the window for processing the audio.
+        overlap_ratio (float): The ratio of overlap between windows.
+        show_progress (bool): Whether to show a progress bar.
+    """
     audio = batch['audio']
     audio_len = audio.shape[-1]
 

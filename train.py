@@ -18,7 +18,6 @@ if __name__ == "__main__":
     train_loader = DataLoader(train_dataset, batch_size=training_config["batch_size"], shuffle=True, num_workers=4, persistent_workers=True)
     val_dataset = DataLoader(val_dataset, batch_size=training_config["batch_size"], shuffle=False, num_workers=4, persistent_workers=True)
     
-    # checkpoint_path = "piano-transcription/61pnybxp/checkpoints/epoch=399-step=3200.ckpt"
     checkpoint_path = None
     model = Mamba_AMT(model_config, start_lr=training_config["start_lr"], end_lr=training_config["end_lr"], max_epochs=training_config["num_epochs"])
 

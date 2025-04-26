@@ -4,6 +4,14 @@ from torch import nn
 from mamba_ssm import Mamba
 
 class ConvStack(nn.Module):
+    """
+    Convolutional stack for feature extraction from mel spectrograms.
+
+    Args:
+        input_features (int): Number of input features (e.g., mel spectrogram features).
+        output_features (int): Number of output features (e.g., model dimension).
+        dropout (float): Dropout rate for regularization.
+    """
     def __init__(self, input_features, output_features, dropout=0.1):
         super().__init__()
 
@@ -107,6 +115,21 @@ class MambaBlock(nn.Module):
 
 
 class Transcriber(nn.Module):
+    """
+    Transcriber model for piano transcription using Mamba blocks.
+    
+    Args:
+        input_features (int): Number of input features (e.g., mel spectrogram features).
+        out_features (int): Number of output features (e.g., number of MIDI notes).
+        mamba_blocks (int): Number of Mamba blocks to stack.
+        bidirectional_cfg (dict): Configuration for bidirectional processing.
+            Possible keys:
+                - 'shared' (bool): Whether forward and backward Mamba layers share weights.
+                - 'concat' (bool): Whether to concatenate forward and backward outputs.
+        mamba_config (dict): Configuration dictionary for Mamba layer initialization.
+        use_skip (bool): Whether to use skip connections in the Mamba blocks.
+        with_ff (bool): Whether to include a feed-forward network after the Mamba layer.
+    """
     def __init__(
             self, 
             input_features: int, 

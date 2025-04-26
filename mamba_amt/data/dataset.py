@@ -45,7 +45,7 @@ class PianoRollAudioDataset(Dataset):
                     p=0.5
                 ),
                 SevenBandParametricEQ(min_gain_db=-10, max_gain_db=5, p=0.5),
-                ApplyImpulseResponse(ir_path=ir_path, p=0.3)
+                ApplyImpulseResponse(ir_path=ir_path, p=0.5)
             ])
 
     def __getitem__(self, index):

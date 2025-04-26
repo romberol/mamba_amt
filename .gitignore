@@ -8,3 +8,4 @@ wandb/
 datasets/
 piano-transcription/
 output/
+checkpoints/

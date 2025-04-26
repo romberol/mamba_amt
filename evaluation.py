@@ -97,7 +97,11 @@ if __name__ == "__main__":
     dataset = MAESTRO(**dataset_config, sequence_length=None if args.full_tracks else training_config["sequence_length"], groups=[args.groups])
     loader = DataLoader(dataset, batch_size=1, shuffle=False)
 
-    model = Mamba_AMT.load_from_checkpoint(args.ckpt_path, model_config=model_config)
+    model = Mamba_AMT(model_config)
+    model.load_state_dict(torch.load(args.ckpt_path, map_location="cpu")["state_dict"])
+    model.eval()
+    model.to("cuda")
+
     all_metrics = defaultdict(list)
     for batch in tqdm(loader):
         if args.full_tracks:

@@ -6,6 +6,15 @@ from .modules import Transcriber
 import torch.nn.functional as F
 
 class Mamba_AMT(pl.LightningModule):
+    """
+    Mamba AMT model for piano transcription.
+
+    Args:
+        model_config (dict): Configuration for the Mamba model.
+        start_lr (float): Initial learning rate.
+        end_lr (float): Final learning rate.
+        max_epochs (int): Maximum number of epochs for training.
+    """
     def __init__(self, model_config, start_lr=5e-4, end_lr=5e-5, max_epochs=100):
         super().__init__()
         self.melspectrogram = MelSpectrogram(
